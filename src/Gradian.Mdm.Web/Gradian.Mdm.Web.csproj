@@ -4,7 +4,7 @@
     <UserSecretsId>gradian-mdm-web</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Gradian.Mdm.Infrastructure\Gradian.Mdm.Infrastructure.csproj" />

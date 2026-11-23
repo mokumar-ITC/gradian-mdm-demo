@@ -3,7 +3,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.8" />
-    <PackageReference Include="Npgsql" Version="10.0.4" />
+    <PackageReference Include="Npgsql" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Gradian.Mdm.Core\Gradian.Mdm.Core.csproj" />

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Business rules: product master browse / maker-checker workflow, column locks, user accounts. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gradian.Mdm.Core\Gradian.Mdm.Core.csproj" />
+  </ItemGroup>
+</Project>

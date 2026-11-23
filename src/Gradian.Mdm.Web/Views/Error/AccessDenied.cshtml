@@ -1,0 +1,14 @@
+﻿@model string
+@{
+    ViewData["Title"] = "Access Denied";
+}
+
+<div class="text-center py-5">
+    <h2 class="text-danger">Access Denied</h2>
+    <p class="mb-1">@Model</p>
+    <p class="text-muted">
+        You are signed in as <b>@(User.FindFirst("DisplayName")?.Value ?? User.Identity?.Name)</b>
+        (@(User.FindFirst("LevelDesc")?.Value)). Ask an administrator for more access, or sign in as a different user.
+    </p>
+    <a class="btn btn-primary" asp-controller="ProductMaster" asp-action="Index">Go to Product Master</a>
+</div>

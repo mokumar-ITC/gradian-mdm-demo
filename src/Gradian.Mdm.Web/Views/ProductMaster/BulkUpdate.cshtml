@@ -1,0 +1,279 @@
+@model Gradian.Mdm.Services.DTO.ProductBulkEditPage
+@using System.Globalization
+@using Gradian.Mdm.Core.Entities
+@using Gradian.Mdm.Services.DTO
+@{
+    ViewData["Title"] = "Bulk update products";
+    var rows = Model.Form.Rows;
+    string L(string property) => ProductFieldLabels.Label(Model.Labels, property);
+    string Val(ProductMasterValues v, string property)
+    {
+        var x = typeof(ProductMasterValues).GetProperty(property)!.GetValue(v);
+        return x switch { null => "", decimal d => d.ToString("0.##", CultureInfo.InvariantCulture), _ => Convert.ToString(x, CultureInfo.InvariantCulture) ?? "" };
+    }
+
+    // kind: text | int | dec | select | list
+    var columns = new (string Prop, string Kind, int Max, IEnumerable<string>? Options)[]
+    {
+        ("ProductName", "text", 255, null),
+        ("ProductCode", "text", 50, null),
+        ("Status", "select", 0, ProductMasterValues.Statuses),
+        ("CapacityGroup", "list", 100, Model.CapacityGroups),
+        ("SiopModel", "list", 50, Model.SiopModels),
+        ("SiopTier", "list", 50, Model.SiopTiers),
+        ("DefaultSupplySource", "list", 20, Model.SupplySources),
+        ("SectionsPerUnit", "int", 0, null),
+        ("StandardUnitMultiplier", "dec", 0, null),
+        ("SalePricePerUnit", "dec", 0, null),
+        ("SalePricePerHour", "dec", 0, null),
+        ("EstFabHours", "dec", 0, null),
+        ("EstAssemblyHours", "dec", 0, null),
+        ("FabLbrHrsPct", "dec", 0, null),
+        ("AssmbLbrHrsPct", "dec", 0, null),
+        ("QtyFans", "int", 0, null),
+        ("QtyCoils", "int", 0, null),
+        ("QtyPanels", "int", 0, null),
+    };
+}
+
+<div class="pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1">
+            <li class="breadcrumb-item"><a asp-action="Index">Product Master</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Bulk update</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <h4 class="mb-0">Bulk update <span class="text-muted fs-6">(@rows.Count product@(rows.Count == 1 ? "" : "s"))</span></h4>
+        <a class="btn btn-outline-primary btn-sm" asp-action="Index"><i class="bi bi-arrow-left"></i> Back to list</a>
+    </div>
+
+    @if (Model.GoesToApproval)
+    {
+        <div class="pm-note pm-note-info py-2"><i class="bi bi-person-check"></i> As a <strong>Maker</strong>, each changed product is sent to a Checker for approval. Products keep their current values until then.</div>
+    }
+    else
+    {
+        <div class="pm-note pm-note-secondary py-2"><i class="bi bi-lightning"></i> As a <strong>Checker / Admin</strong>, your changes are saved directly and recorded in each product's change history.</div>
+    }
+    @if (Model.Skipped.Count > 0)
+    {
+        <div class="pm-note pm-note-warning py-2">
+            <i class="bi bi-info-circle"></i> Some selected products are not in this batch:
+            <ul class="mb-0">@foreach (var s in Model.Skipped) { <li>@s</li> }</ul>
+        </div>
+    }
+    @if (ViewBag.FormError != null)
+    {
+        <div class="pm-note pm-note-danger py-2" role="alert"><i class="bi bi-exclamation-triangle"></i> @ViewBag.FormError</div>
+    }
+
+    <p class="text-muted mb-2">
+        Edit the cells you need. To give several products the same value, type it in the blue <strong>Set for all</strong> row and choose
+        <strong>Apply to all rows</strong>; blank cells in that row are ignored. Products with no changes are left as they are. Changed cells are highlighted.
+    </p>
+
+    <form asp-action="BulkUpdate" method="post" id="pmBulkForm">
+        <div class="pm-bulk-wrap mb-3">
+            <table class="table table-bordered table-sm pm-bulk" id="pmBulkTable">
+                <thead class="tb-header">
+                    <tr>
+                        <th class="pm-sticky">Product</th>
+                        @foreach (var c in columns)
+                        {
+                            <th class="pm-col-@c.Prop">
+                                @L(c.Prop)
+                                @if (Model.Locked.Contains(c.Prop)) { <i class="bi bi-lock-fill" title="Locked by an administrator"></i> }
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="pm-fill-row">
+                        <td class="pm-sticky">
+                            <strong>Set for all</strong>
+                            <div class="d-flex gap-1 mt-1">
+                                <button type="button" class="btn btn-sm btn-primary" id="pmApplyFill"><i class="bi bi-arrow-down-square"></i> Apply to all rows</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="pmClearFill" title="Clear this row">Clear</button>
+                            </div>
+                        </td>
+                        @foreach (var c in columns)
+                        {
+                            var locked = Model.Locked.Contains(c.Prop);
+                            <td class="pm-col-@c.Prop">
+                                @if (c.Kind == "select")
+                                {
+                                    <select class="form-select form-select-sm" data-fill="@c.Prop" disabled="@locked" aria-label="Set @L(c.Prop) for all rows">
+                                        <option value=""></option>
+                                        @foreach (var o in c.Options!) { <option value="@o">@o</option> }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input class="form-control form-control-sm" data-fill="@c.Prop" disabled="@locked" aria-label="Set @L(c.Prop) for all rows"
+                                           type="@(c.Kind is "int" or "dec" ? "number" : "text")" min="@(c.Kind is "int" or "dec" ? "0" : null)"
+                                           step="@(c.Kind == "int" ? "1" : c.Kind == "dec" ? "any" : null)" maxlength="@(c.Max > 0 ? c.Max : null)"
+                                           list="@(c.Kind == "list" ? "dl_" + c.Prop : null)" autocomplete="off" />
+                                }
+                            </td>
+                        }
+                    </tr>
+                    @for (var i = 0; i < rows.Count; i++)
+                    {
+                        var row = rows[i];
+                        var product = Model.Products[row.ProductId];
+                        var prefix = $"Form.Rows[{i}].";
+                        Model.RowErrors.TryGetValue(row.ProductId, out var rowError);
+                        <tr class="pm-bulk-row @(rowError != null ? "pm-row-error" : "")" data-product="@row.ProductId">
+                            <td class="pm-sticky">
+                                <input type="hidden" name="Form.Rows.Index" value="@i" />
+                                <input type="hidden" name="@(prefix)ProductId" value="@row.ProductId" />
+                                <div class="d-flex align-items-start gap-1">
+                                    <div class="flex-grow-1">
+                                        <a asp-action="Details" asp-route-id="@product.ProductId" target="_blank">@product.ProductName</a>
+                                        <div class="small text-muted">@product.ProductCode &middot; @product.NodePath</div>
+                                        <span class="badge bg-primary pm-row-count" hidden></span>
+                                        @if (rowError != null) { <div class="pm-row-msg"><i class="bi bi-exclamation-circle"></i> @rowError</div> }
+                                    </div>
+                                    @if (rows.Count > 1)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 pm-remove" title="Remove from this batch" aria-label="Remove @product.ProductName from this batch"><i class="bi bi-x-lg"></i></button>
+                                    }
+                                </div>
+                            </td>
+                            @foreach (var c in columns)
+                            {
+                                var name = prefix + c.Prop;
+                                var value = Val(row, c.Prop);
+                                var orig = Val(product, c.Prop);
+                                <td class="pm-col-@c.Prop">
+                                    @switch (c.Kind)
+                                    {
+                                        case "select":
+                                            <select name="@name" class="form-select form-select-sm pm-field" data-prop="@c.Prop" data-orig="@orig" aria-label="@L(c.Prop) for @product.ProductName">
+                                                @foreach (var o in c.Options!) { <option value="@o" selected="@(value == o)">@o</option> }
+                                            </select>
+                                            break;
+                                        case "int":
+                                        case "dec":
+                                            <input name="@name" value="@value" type="number" min="0" step="@(c.Kind == "int" ? "1" : "any")"
+                                                   class="form-control form-control-sm pm-field" data-prop="@c.Prop" data-orig="@orig" aria-label="@L(c.Prop) for @product.ProductName" />
+                                            break;
+                                        default:
+                                            <input name="@name" value="@value" maxlength="@c.Max" list="@(c.Kind == "list" ? "dl_" + c.Prop : null)" autocomplete="off"
+                                                   required="@(c.Prop == "ProductName")"
+                                                   class="form-control form-control-sm pm-field" data-prop="@c.Prop" data-orig="@orig" aria-label="@L(c.Prop) for @product.ProductName" />
+                                            break;
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @foreach (var c in columns.Where(c => c.Kind == "list"))
+        {
+            <datalist id="dl_@c.Prop">@foreach (var o in c.Options!) { <option value="@o"></option> }</datalist>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-8">
+                <label for="pmBulkRemarks" class="form-label mb-0">Reason for change <span class="text-muted">(applies to every product in this batch)</span></label>
+                <textarea id="pmBulkRemarks" name="Form.ChangeRemarks" class="form-control" rows="3" maxlength="2000"
+                          placeholder="@(Model.GoesToApproval ? "Tell the Checker why these changes are needed (recommended)" : "Optional note for the change history")">@Model.Form.ChangeRemarks</textarea>
+            </div>
+            <div class="col-lg-4 d-flex flex-column justify-content-end gap-2">
+                <span class="text-muted" id="pmChangeCount"></span>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" id="pmBulkSubmit">
+                        <i class="bi @(Model.GoesToApproval ? "bi-send" : "bi-save")"></i> @(Model.GoesToApproval ? "Submit for approval" : "Save changes")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="pmResetAll">Undo all changes</button>
+                    <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<partial name="_ProductMasterStyles" />
+@{
+    await Html.RenderPartialAsync("_LoaderPartial");
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            var table = document.getElementById('pmBulkTable');
+            function fields() { return table.querySelectorAll('.pm-bulk-row .pm-field'); }
+            function editable(el) { return !el.readOnly && !el.disabled; }
+            function norm(el, v) {
+                v = (v || '').trim();
+                if (el.type === 'number' && v !== '') { var n = Number(v); return isNaN(n) ? v : String(n); }
+                return v;
+            }
+            function refresh() {
+                var cells = 0, products = 0;
+                table.querySelectorAll('.pm-bulk-row').forEach(function (tr) {
+                    var n = 0;
+                    tr.querySelectorAll('.pm-field').forEach(function (el) {
+                        var changed = norm(el, el.value) !== norm(el, el.dataset.orig);
+                        el.classList.toggle('pm-changed', changed);
+                        el.title = changed ? 'Was: ' + (el.dataset.orig === '' ? '(blank)' : el.dataset.orig) : (el.readOnly || el.disabled ? 'Locked by an administrator' : '');
+                        if (changed) n++;
+                    });
+                    var badge = tr.querySelector('.pm-row-count');
+                    badge.hidden = n === 0;
+                    badge.textContent = n + ' changed';
+                    cells += n;
+                    if (n > 0) products++;
+                });
+                document.getElementById('pmChangeCount').textContent = cells === 0
+                    ? 'No changes yet'
+                    : cells + ' field(s) changed in ' + products + ' product(s)';
+            }
+            table.addEventListener('input', function (e) { if (e.target.classList.contains('pm-field')) refresh(); });
+            table.addEventListener('change', function (e) { if (e.target.classList.contains('pm-field')) refresh(); });
+
+            document.getElementById('pmApplyFill').addEventListener('click', function () {
+                var applied = 0;
+                table.querySelectorAll('[data-fill]').forEach(function (fill) {
+                    if (fill.disabled || fill.value.trim() === '') return;
+                    fields().forEach(function (el) {
+                        if (el.dataset.prop === fill.dataset.fill && editable(el)) { el.value = fill.value.trim(); applied++; }
+                    });
+                });
+                refresh();
+                if (applied === 0) alert('Type a value in the "Set for all" row first.');
+            });
+            document.getElementById('pmClearFill').addEventListener('click', function () {
+                table.querySelectorAll('[data-fill]').forEach(function (fill) { fill.value = ''; });
+            });
+            document.getElementById('pmResetAll').addEventListener('click', function () {
+                if (!confirm('Undo every change in this grid?')) return;
+                fields().forEach(function (el) { if (editable(el)) el.value = el.dataset.orig; });
+                refresh();
+            });
+            table.addEventListener('click', function (e) {
+                var btn = e.target.closest('.pm-remove');
+                if (!btn) return;
+                btn.closest('tr').remove();
+                if (table.querySelectorAll('.pm-bulk-row').length === 1)
+                    table.querySelectorAll('.pm-remove').forEach(function (b) { b.remove(); });
+                refresh();
+            });
+            document.getElementById('pmBulkForm').addEventListener('submit', function (e) {
+                if (table.querySelectorAll('.pm-bulk-row .pm-changed').length === 0) {
+                    e.preventDefault();
+                    alert('Nothing has been changed yet.');
+                    return;
+                }
+                showloader();
+            });
+            refresh();
+        })();
+    </script>
+}

@@ -1,0 +1,16 @@
+<Project>
+  <!-- Shared settings for every project in the solution. -->
+  <PropertyGroup>
+    <!-- .NET 10 is the current LTS release. A machine with only an older SDK can build with -p:MdmTargetFramework=net9.0. -->
+    <MdmTargetFramework Condition="'$(MdmTargetFramework)' == ''">net10.0</MdmTargetFramework>
+    <TargetFramework>$(MdmTargetFramework)</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <!-- Fail the restore when a referenced package (direct or transitive) has a known vulnerability. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

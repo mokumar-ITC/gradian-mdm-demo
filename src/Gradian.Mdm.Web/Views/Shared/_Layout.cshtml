@@ -1,0 +1,110 @@
+﻿@inject Gradian.Mdm.Services.Interfaces.IUserRoleService UserRoleService
+@{
+    // Menu visibility only; every action checks the level again on the server (RoleRequirement).
+    // Prefer the level the role filter just read from the database; fall back to the sign-in claim; default to none.
+    var userLevel = UserRoleService.CurrentUserRole?.LevelNo
+                    ?? (int.TryParse(User.FindFirst("LevelNo")?.Value, out var claimLevel) ? claimLevel : 0);
+    var signedIn = User.Identity?.IsAuthenticated == true;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Gradian MDM</title>
+    <link rel="icon" href="~/favicon.ico" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-table/bootstrap-table.min.css" />
+    <link rel="stylesheet" href="~/lib/jquery-resizable-columns/jquery.resizableColumns.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Gradian.Mdm.Web.styles.css" asp-append-version="true" />
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+</head>
+
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-dark bg-hd-cus border-bottom box-shadow">
+            <div class="container-fluid">
+                <img src="~/images/itconvergence-logo.png" height="45" alt="IT Convergence" asp-append-version="true" />
+                <h2 class="ps-3 pe-3 mb-0 brand-title">Gradian MDM</h2>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"
+                        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    @if (signedIn)
+                    {
+                        <ul class="navbar-nav flex-grow-1">
+                            <li class="nav-item dropdown nav-box">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Product Master
+                                </a>
+                                <ul class="dropdown-menu bg-hd-cus">
+                                    <li><a class="dropdown-item" asp-controller="ProductMaster" asp-action="Index" onclick="showloader()">Product Hierarchy</a></li>
+                                    <li><a class="dropdown-item" asp-controller="ProductMaster" asp-action="Index" asp-route-status="Active" onclick="showloader()">Active Products</a></li>
+                                    <li><a class="dropdown-item" asp-controller="ProductMaster" asp-action="Index" asp-route-approval="PendingApproval" onclick="showloader()">Pending Approval</a></li>
+                                    @if (userLevel >= 3)
+                                    {
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Approvals</h6></li>
+                                        <li><a class="dropdown-item" asp-controller="ProductMaster" asp-action="Approvals" onclick="showloader()">Product Approval</a></li>
+                                    }
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" asp-controller="ProductMaster" asp-action="Fields" onclick="showloader()">Field Dictionary</a></li>
+                                </ul>
+                            </li>
+                            @if (userLevel >= 4)
+                            {
+                                <li class="nav-item dropdown nav-box">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Administration
+                                    </a>
+                                    <ul class="dropdown-menu bg-hd-cus">
+                                        <li><a class="dropdown-item" asp-controller="Users" asp-action="Index" onclick="showloader()">Users &amp; Access</a></li>
+                                        <li><a class="dropdown-item" asp-controller="ColumnSettings" asp-action="Index" onclick="showloader()">Column Editing</a></li>
+                                    </ul>
+                                </li>
+                            }
+                        </ul>
+                        <div class="d-flex align-items-center gap-2 user-box">
+                            <i class="bi bi-person-circle"></i>
+                            <span>@(User.FindFirst("DisplayName")?.Value ?? User.Identity!.Name)</span>
+                            <span class="badge rounded-pill role-badge">@User.FindFirst("LevelDesc")?.Value</span>
+                            <form asp-controller="Account" asp-action="Logout" method="post" class="mb-0">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Sign out</button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <main role="main" class="pb-3">
+            @if (TempData["errorMessage"] != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                    @TempData["errorMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; @DateTime.UtcNow.Year - Gradian Master Data Management (demo) by IT Convergence
+        </div>
+    </footer>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/jquery-resizable-columns/jquery.resizableColumns.min.js"></script>
+    <script src="~/lib/bootstrap-table/bootstrap-table.min.js"></script>
+    <script src="~/lib/bootstrap-table/extensions/resizable/bootstrap-table-resizable.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

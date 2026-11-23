@@ -1,0 +1,37 @@
+@model IReadOnlyList<Gradian.Mdm.Core.Entities.ProductMasterField>
+@{
+    ViewData["Title"] = "Product Master Fields";
+}
+
+<div class="pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1">
+            <li class="breadcrumb-item"><a asp-action="Index">Product Master</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Field dictionary</li>
+        </ol>
+    </nav>
+    <h4>Field Dictionary</h4>
+    <p class="text-muted">The @Model.Count fields of the Gradian product master, in workbook order, with the column each one is stored in.</p>
+
+    <table class="table table-bordered table-sm align-top">
+        <thead class="tb-header">
+            <tr>
+                <th style="width:3rem">#</th>
+                <th style="width:14rem">Workbook field</th>
+                <th style="width:14rem">Stored in</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var f in Model)
+            {
+                <tr>
+                    <td>@f.FieldOrder</td>
+                    <td class="fw-semibold">@f.SourceField</td>
+                    <td><code>@f.ColumnName</code></td>
+                    <td>@f.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

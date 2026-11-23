@@ -1,0 +1,187 @@
+@model Gradian.Mdm.Services.DTO.ProductMasterDetail
+@using Gradian.Mdm.Services.DTO
+@inject Gradian.Mdm.Services.Interfaces.IProductMasterService ProductMasterService
+@{
+    var labels = await ProductMasterService.LabelsAsync();
+    // Workbook field -> label, using an admin's display name for the editable columns
+    string RowLabel(string field, string builtIn)
+    {
+        var prop = ProductFieldLabels.All.FirstOrDefault(f => f.Field == field).Property;
+        return prop == null ? builtIn : ProductFieldLabels.Label(labels, prop);
+    }
+    var userLevel = ViewBag.UserLevel as int? ?? 0;
+    var pendingReq = Model.PendingRequest;
+    var p = Model.Product;
+    ViewData["Title"] = p.ProductName;
+    string StatusClass(string s) => s switch { "Active" => "bg-success", "Inactive" => "bg-warning text-dark", _ => "bg-secondary" };
+    string N(decimal? v, string format = "0.##") => v?.ToString(format) ?? "";
+
+    var groups = new (string Title, string Icon, (string Field, string Label, string? Value)[] Rows)[]
+    {
+        ("Hierarchy", "bi-diagram-3", new (string, string, string?)[] {
+            ("Product_Family", "Product Family", p.ProductFamily),
+            ("Product_Type", "Product Type", p.ProductType),
+            ("Model", "Model", p.Model),
+            ("Size", "Size", p.Size),
+            ("Capacity Group", "Capacity Group", p.CapacityGroup) }),
+        ("Planning (SIOP)", "bi-calendar3", new (string, string, string?)[] {
+            ("SIOP_Model", "SIOP Model", p.SiopModel),
+            ("SIOP_Tier", "SIOP Tier", p.SiopTier),
+            ("Default_Supply_Source", "Default Supply Source", p.DefaultSupplySource),
+            ("Standard_Unit_Multiplier", "Standard Unit Multiplier", N(p.StandardUnitMultiplier)),
+            ("Sections_Per_Unit", "Sections per Unit", p.SectionsPerUnit?.ToString()) }),
+        ("Commercial", "bi-currency-dollar", new (string, string, string?)[] {
+            ("Sale_Price_Per_Unit", "Sale Price per Unit", N(p.SalePricePerUnit, "N0")),
+            ("Sale_Price_Per_Hour", "Sale Price per Hour", N(p.SalePricePerHour, "N0")) }),
+        ("Labor", "bi-tools", new (string, string, string?)[] {
+            ("Est_Fab_Hours", "Est. Fabrication Hours", N(p.EstFabHours)),
+            ("Est_Assembly_Hours", "Est. Assembly Hours", N(p.EstAssemblyHours)),
+            ("Fab_Lbr_Hrs_%", "Fabrication Labor Hrs %", N(p.FabLbrHrsPct)),
+            ("Assmb_Lbr_Hrs_%", "Assembly Labor Hrs %", N(p.AssmbLbrHrsPct)) }),
+        ("Components", "bi-fan", new (string, string, string?)[] {
+            ("Qty_Fans", "Fans", p.QtyFans?.ToString()),
+            ("Qty_Coils", "Coils", p.QtyCoils?.ToString()),
+            ("Qty_Panels", "Panels", p.QtyPanels?.ToString()) }),
+    };
+}
+
+<div class="pt-3">
+    <partial name="_Alert" />
+    <nav aria-label="Hierarchy path">
+        <ol class="breadcrumb mb-1">
+            <li class="breadcrumb-item"><a asp-action="Index">Product Master</a></li>
+            @foreach (var crumb in Model.Breadcrumb)
+            {
+                <li class="breadcrumb-item"><a asp-action="Index" asp-route-nodeId="@crumb.NodeId" title="@crumb.LevelName">@crumb.NodeName</a></li>
+            }
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h4 class="mb-1">@p.ProductName</h4>
+            <span class="badge @StatusClass(p.Status)">@p.Status</span>
+            @if (!string.IsNullOrEmpty(p.UpdateStatus))
+            {
+                <span class="badge rounded-pill @ProductApproval.BadgeClass(p.UpdateStatus)">@ProductApproval.Label(p.UpdateStatus)</span>
+            }
+            <span class="text-muted ms-2">@ProductFieldLabels.Label(labels, "ProductCode") <strong>@p.ProductCode</strong></span>
+            @if (p.SourceRow != null)
+            {
+                <span class="text-muted ms-2">&middot; Workbook row @p.SourceRow</span>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            @if (userLevel >= 2 && pendingReq == null)
+            {
+                <a class="btn btn-primary btn-sm" asp-action="Edit" asp-route-id="@p.ProductId" onclick="showloader()"><i class="bi bi-pencil-square"></i> Edit</a>
+            }
+            <a class="btn btn-outline-primary btn-sm" asp-action="Index" asp-route-nodeId="@p.NodeId"><i class="bi bi-arrow-left"></i> Back to @(Model.Breadcrumb.LastOrDefault()?.NodeName ?? "list")</a>
+        </div>
+    </div>
+
+    @if (pendingReq != null)
+    {
+        <div class="pm-note pm-note-warning d-flex flex-wrap align-items-center gap-2">
+            <i class="bi bi-hourglass-split"></i>
+            <span>
+                <strong>Pending approval:</strong> @pendingReq.MakerId submitted a change on @pendingReq.ChangeTimestamp.ToString("dd-MM-yyyy HH:mm 'UTC'")
+                (@pendingReq.ChangedFrom(p).Count field(s)). The values below stay in effect until a Checker approves it.
+            </span>
+            @if (userLevel >= 3)
+            {
+                <a class="btn btn-sm btn-dark ms-auto" asp-action="Review" asp-route-id="@pendingReq.AuditId"><i class="bi bi-search"></i> Review change</a>
+            }
+        </div>
+    }
+    else if (p.UpdateStatus == ProductApproval.Rejected)
+    {
+        <div class="pm-note pm-note-danger py-2"><i class="bi bi-x-circle"></i> The last change was rejected by @p.UpdatedBy@(string.IsNullOrEmpty(p.Remarks) ? "." : ": " + p.Remarks)</div>
+    }
+
+    <div class="row g-3">
+        @foreach (var g in groups)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="card h-100">
+                    <div class="card-header tb-header"><i class="bi @g.Icon"></i> @g.Title</div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0 pm-attr">
+                            <tbody>
+                                @foreach (var row in g.Rows)
+                                {
+                                    var tip = Model.FieldDescriptions.GetValueOrDefault(row.Field);
+                                    <tr>
+                                        <th class="ps-3">
+                                            @RowLabel(row.Field, row.Label)
+                                            @if (!string.IsNullOrEmpty(tip))
+                                            {
+                                                <i class="bi bi-info-circle pm-help" title="@tip"></i>
+                                            }
+                                        </th>
+                                        <td>@(string.IsNullOrEmpty(row.Value) ? "—" : row.Value)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <h5 class="mt-4">Change history</h5>
+    @if (Model.History.Count == 0)
+    {
+        <p class="text-muted">No changes since the product was loaded from the workbook.</p>
+    }
+    else
+    {
+        <table class="table table-bordered table-sm align-top">
+            <thead class="tb-header">
+                <tr><th>#</th><th>Requested</th><th>By</th><th>Approval</th><th>Decided by</th><th>Comments</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var h in Model.History)
+                {
+                    <tr>
+                        <td>
+                            @if (userLevel >= 3)
+                            {
+                                <a asp-action="Review" asp-route-id="@h.AuditId">@h.AuditId</a>
+                            }
+                            else
+                            {
+                                @h.AuditId
+                            }
+                        </td>
+                        <td>@h.ChangeTimestamp.ToString("dd-MM-yyyy HH:mm 'UTC'")</td>
+                        <td>@h.MakerId <span class="text-muted">(@h.LastModifiedByRole)</span></td>
+                        <td><span class="badge rounded-pill @ProductApproval.BadgeClass(h.ApprovalStatus)">@ProductApproval.Label(h.ApprovalStatus)</span></td>
+                        <td>@(h.ApprovalStatus == ProductApproval.Direct ? "" : h.CheckerId) @h.ApprovalTimestamp?.ToString("dd-MM-yyyy HH:mm 'UTC'")</td>
+                        <td class="small">
+                            @if (!string.IsNullOrEmpty(h.Remarks)) { <div><i class="bi bi-person"></i> @h.Remarks</div> }
+                            @if (!string.IsNullOrEmpty(h.CheckerRemarks)) { <div><i class="bi bi-person-check"></i> @h.CheckerRemarks</div> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (Model.Siblings.Count > 0)
+    {
+        <h5 class="mt-4">Other products under @(Model.Breadcrumb.LastOrDefault()?.NodeName)</h5>
+        <ul class="list-unstyled">
+            @foreach (var s in Model.Siblings)
+            {
+                <li class="mb-1"><span class="badge @StatusClass(s.Status) me-1">@s.Status</span><a asp-action="Details" asp-route-id="@s.ProductId">@s.ProductName</a> <span class="text-muted">(@s.ProductCode)</span></li>
+            }
+        </ul>
+    }
+</div>
+
+<partial name="_ProductMasterStyles" />
+@{
+    await Html.RenderPartialAsync("_LoaderPartial");
+}

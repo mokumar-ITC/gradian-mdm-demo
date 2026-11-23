@@ -1,0 +1,35 @@
+@model Gradian.Mdm.Services.DTO.ProductTreeNode
+@{
+    var selectedId = ViewData["SelectedId"] as long?;
+    var openIds = ViewData["OpenIds"] as HashSet<long> ?? new HashSet<long>();
+    var isSelected = selectedId == Model.Node.NodeId;
+    var hasChildren = Model.Children.Count > 0;
+    var isOpen = openIds.Contains(Model.Node.NodeId);
+    var notSpecified = Model.Node.NodeName == "(Not specified)";
+}
+<li class="pm-node pm-level-@Model.Node.LevelNo">
+    <div class="pm-row @(isSelected ? "pm-selected" : "")">
+        @if (hasChildren)
+        {
+            <button type="button" class="pm-toggle" aria-expanded="@(isOpen ? "true" : "false")" aria-label="Expand @Model.Node.NodeName">
+                <i class="bi @(isOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            </button>
+        }
+        else
+        {
+            <span class="pm-toggle-spacer"></span>
+        }
+        <a class="pm-link @(notSpecified ? "fst-italic text-muted" : "")" title="@Model.Node.LevelName: @Model.Node.NodePath"
+           asp-action="Index" asp-route-nodeId="@Model.Node.NodeId">@Model.Node.NodeName</a>
+        <span class="pm-count" title="@Model.ActiveProducts active of @Model.TotalProducts products">@Model.TotalProducts</span>
+    </div>
+    @if (hasChildren)
+    {
+        <ul class="pm-children" @(isOpen ? "" : "hidden")>
+            @foreach (var child in Model.Children)
+            {
+                <partial name="_TreeNode" model="child" view-data="ViewData" />
+            }
+        </ul>
+    }
+</li>

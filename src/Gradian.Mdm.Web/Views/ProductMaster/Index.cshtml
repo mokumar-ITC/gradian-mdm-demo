@@ -1,0 +1,428 @@
+@model Gradian.Mdm.Services.DTO.ProductMasterBrowse
+@using Gradian.Mdm.Services.DTO
+@inject Gradian.Mdm.Services.Interfaces.IProductMasterService ProductMasterService
+@{
+    var labels = await ProductMasterService.LabelsAsync();
+    string L(string property) => ProductFieldLabels.Label(labels, property);
+    var canBulk = (ViewBag.UserLevel as int? ?? 0) >= 2;
+    var canDecide = (ViewBag.UserLevel as int? ?? 0) >= 3;   // Checker / Admin: bulk approve / reject pending rows here
+    var me = ViewBag.UserName as string ?? "";
+    var userLevel = ViewBag.UserLevel as int? ?? 0;
+    ViewData["Title"] = "Product Master";
+    var openIds = Model.Breadcrumb.Select(b => b.NodeId).ToHashSet();
+    ViewData["SelectedId"] = Model.NodeId;
+    ViewData["OpenIds"] = openIds;
+    string Tip(string field) => Model.FieldDescriptions.TryGetValue(field, out var d) ? d ?? "" : "";
+    string StatusClass(string s) => s switch { "Active" => "bg-success", "Inactive" => "bg-warning text-dark", _ => "bg-secondary" };
+    var levelNames = new Dictionary<int, string> { [1] = "Families", [2] = "Product Types", [3] = "Models", [4] = "Sizes" };
+    var scopeTitle = Model.Selected?.Node.NodeName ?? "All products";
+    var nextLevel = Model.Selected?.Children.FirstOrDefault()?.Node.LevelName;
+}
+
+<div class="pt-3">
+    <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2 mb-2">
+        <div>
+            <h4 class="mb-0">Product Master</h4>
+            <div class="text-muted">Gradian Thermal Solutions &middot; Product Family &rarr; Product Type &rarr; Model &rarr; Size &rarr; Product</div>
+        </div>
+        <a asp-action="Fields" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-text"></i> Field dictionary</a>
+    </div>
+
+    <partial name="_Alert" />
+
+    <div class="row g-2 mb-3 pm-stats">
+        @foreach (var level in levelNames)
+        {
+            <div class="col-6 col-md">
+                <div class="pm-stat"><div class="pm-stat-value">@Model.NodesPerLevel.GetValueOrDefault(level.Key)</div><div class="pm-stat-label">@level.Value</div></div>
+            </div>
+        }
+        <div class="col-6 col-md">
+            <div class="pm-stat pm-stat-accent"><div class="pm-stat-value">@Model.Roots.Sum(r => r.TotalProducts)</div><div class="pm-stat-label">Products</div></div>
+        </div>
+        <div class="col-6 col-md">
+            <a class="pm-stat pm-stat-pending d-block text-decoration-none"
+               href="@(userLevel >= 3 ? Url.Action("Approvals") : Url.Action("Index", new { approval = ProductApproval.Pending }))">
+                <div class="pm-stat-value">@Model.PendingTotal</div>
+                <div class="pm-stat-label">Pending approval <i class="bi bi-arrow-right-short"></i></div>
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <aside class="col-lg-4 col-xl-3">
+            <div class="card pm-tree-card">
+                <div class="card-header tb-header d-flex align-items-center justify-content-between">
+                    <span>Hierarchy</span>
+                    <span>
+                        <button type="button" class="btn btn-sm btn-link text-white p-0 me-2" id="pmExpandAll" title="Expand all"><i class="bi bi-arrows-expand"></i></button>
+                        <button type="button" class="btn btn-sm btn-link text-white p-0" id="pmCollapseAll" title="Collapse all"><i class="bi bi-arrows-collapse"></i></button>
+                    </span>
+                </div>
+                <div class="card-body p-2">
+                    <input type="search" id="pmTreeFilter" class="form-control form-control-sm mb-2" placeholder="Find in hierarchy..." aria-label="Find in hierarchy" />
+                    <ul class="pm-tree" id="pmTree">
+                        <li class="pm-node">
+                            <div class="pm-row @(Model.NodeId == null ? "pm-selected" : "")">
+                                <span class="pm-toggle-spacer"></span>
+                                <a class="pm-link fw-semibold" asp-action="Index">All products</a>
+                                <span class="pm-count">@Model.Roots.Sum(r => r.TotalProducts)</span>
+                            </div>
+                        </li>
+                        @foreach (var root in Model.Roots)
+                        {
+                            <partial name="_TreeNode" model="root" view-data="ViewData" />
+                        }
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <section class="col-lg-8 col-xl-9">
+            <nav aria-label="Hierarchy path">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a asp-action="Index">All products</a></li>
+                    @foreach (var crumb in Model.Breadcrumb)
+                    {
+                        if (crumb.NodeId == Model.NodeId)
+                        {
+                            <li class="breadcrumb-item active" aria-current="page">@crumb.NodeName</li>
+                        }
+                        else
+                        {
+                            <li class="breadcrumb-item"><a asp-action="Index" asp-route-nodeId="@crumb.NodeId">@crumb.NodeName</a></li>
+                        }
+                    }
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <h5 class="mb-0">
+                    @scopeTitle
+                    @if (Model.Selected != null)
+                    {
+                        <span class="badge rounded-pill pm-level-badge align-middle">@Model.Selected.Node.LevelName</span>
+                    }
+                </h5>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Filter by status">
+                    <a class="btn @(string.IsNullOrEmpty(Model.Status) ? "btn-primary" : "btn-outline-primary")"
+                       asp-action="Index" asp-route-nodeId="@Model.NodeId" asp-route-approval="@Model.Approval">All <span class="badge bg-light text-dark">@Model.ProductsInScope</span></a>
+                    @foreach (var s in new[] { "Active", "Inactive", "Archived" })
+                    {
+                        <a class="btn @(Model.Status == s ? "btn-primary" : "btn-outline-primary")"
+                           asp-action="Index" asp-route-nodeId="@Model.NodeId" asp-route-status="@s" asp-route-approval="@Model.Approval">@s <span class="badge bg-light text-dark">@Model.StatusCounts.GetValueOrDefault(s)</span></a>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
+                <span class="text-muted me-1">Approval:</span>
+                <a class="badge rounded-pill pm-filter text-decoration-none @(string.IsNullOrEmpty(Model.Approval) ? "pm-filter-on" : "")"
+                   asp-action="Index" asp-route-nodeId="@Model.NodeId" asp-route-status="@Model.Status">Any</a>
+                @foreach (var f in ProductApproval.Filters)
+                {
+                    var n = Model.ApprovalCounts.GetValueOrDefault(f.Key);
+                    <a class="badge rounded-pill pm-filter text-decoration-none @(Model.Approval == f.Key ? "pm-filter-on" : "")"
+                       asp-action="Index" asp-route-nodeId="@Model.NodeId" asp-route-status="@Model.Status" asp-route-approval="@f.Key">
+                        @if (f.Key != ProductApproval.Unchanged) { <span class="badge @ProductApproval.BadgeClass(f.Key) me-1">&nbsp;</span> }@f.Label <span class="opacity-75">@n</span>
+                    </a>
+                }
+            </div>
+
+            @if (Model.Selected != null && Model.Selected.Children.Count > 0)
+            {
+                <div class="mb-2">
+                    <span class="text-muted me-1">@nextLevel:</span>
+                    @foreach (var child in Model.Selected.Children)
+                    {
+                        <a class="badge rounded-pill pm-chip text-decoration-none" asp-action="Index" asp-route-nodeId="@child.Node.NodeId" asp-route-status="@Model.Status">
+                            @child.Node.NodeName <span class="opacity-75">@child.TotalProducts</span>
+                        </a>
+                    }
+                </div>
+            }
+
+            @if (canBulk)
+            {
+                <div id="pmBulkToolbar" class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary btn-sm" id="pmBulkBtn" disabled
+                            title="Tick the products to change, then edit them together">
+                        <i class="bi bi-pencil-square"></i> Bulk update selected <span class="badge bg-light text-dark" id="pmSelCount">0</span>
+                    </button>
+                    @if (canDecide)
+                    {
+                        <button type="button" class="btn btn-success btn-sm" id="pmApproveSelected" disabled title="Approve the ticked products that are waiting for approval">
+                            <i class="bi bi-check2-all"></i> Approve selected <span class="badge bg-light text-dark pm-pending-count">0</span>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" id="pmRejectSelected" disabled title="Reject the ticked products that are waiting for approval">
+                            <i class="bi bi-x-circle"></i> Reject selected <span class="badge bg-light text-dark pm-pending-count">0</span>
+                        </button>
+                        <span class="text-muted small d-none d-md-inline">Tick rows to update them, or tick rows waiting for approval to approve or reject them. Your own requests can't be ticked.</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted small d-none d-md-inline">Tick rows to update several products at once. Products waiting for approval can't be ticked.</span>
+                    }
+                </div>
+                <form id="pmBulkGo" method="get" action="@Url.Action("BulkUpdate")" hidden></form>
+                @if (canDecide)
+                {
+                    <form asp-action="ApproveSelected" method="post" id="pmDecideForm">
+                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                        <div id="pmDecideIds"></div>
+                        <div class="card mb-2" id="pmDecidePanel" hidden>
+                            <div class="card-body py-2">
+                                <label for="pmDecideRemarks" class="form-label mb-0" id="pmDecideLabel">Review comment</label>
+                                <textarea class="form-control" rows="2" name="remarks" id="pmDecideRemarks" maxlength="2000"></textarea>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button type="submit" class="btn btn-sm" id="pmDecideSubmit"></button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="pmDecideCancel">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                }
+            }
+            <table class="table table-bordered table-hover" id="table"
+                   data-toggle="table"
+                   data-toolbar="@(canBulk ? "#pmBulkToolbar" : null)"
+                   data-id-field="pid"
+                   data-maintain-meta-data="true"
+                   data-page-size="25"
+                   data-page-list="[25, 50, 100, All]"
+                   data-show-columns="true"
+                   data-show-columns-search="true"
+                   data-buttons-align="right"
+                   data-search="true"
+                   data-search-text="@Model.Search"
+                   data-show-fullscreen="true"
+                   data-pagination="true"
+                   data-resizable="true">
+                <thead class="tb-header">
+                    <tr>
+                        @if (canBulk)
+                        {
+                            <th data-field="state" data-checkbox="true" data-formatter="pmCheckFormatter"></th>
+                        }
+                        <th data-field="pid" data-visible="false" data-switchable="false">Id</th>
+                        <th data-field="pending" data-visible="false" data-switchable="false">Pending</th>
+                        <th data-field="audit" data-visible="false" data-switchable="false">Request</th>
+                        <th data-field="own" data-visible="false" data-switchable="false">Own</th>
+                        <th data-sortable="true" title="@Tip("Product_Name")">@L("ProductName")</th>
+                        <th data-sortable="true" title="@Tip("Product_Code")">@L("ProductCode")</th>
+                        <th data-sortable="true" title="@Tip("Product_Family")" data-visible="false">Product Family</th>
+                        <th data-sortable="true" title="@Tip("Product_Type")" data-visible="false">Product Type</th>
+                        <th data-sortable="true" title="@Tip("Model")">Model</th>
+                        <th data-sortable="true" title="@Tip("Size")">Size</th>
+                        <th data-sortable="true" title="@Tip("Capacity Group")">@L("CapacityGroup")</th>
+                        <th data-sortable="true" title="@Tip("SIOP_Model")" data-visible="false">@L("SiopModel")</th>
+                        <th data-sortable="true" title="@Tip("SIOP_Tier")" data-visible="false">@L("SiopTier")</th>
+                        <th data-sortable="true" title="@Tip("Default_Supply_Source")" data-visible="false">@L("DefaultSupplySource")</th>
+                        <th data-sortable="true" title="@Tip("Sale_Price_Per_Unit")" class="text-end">@L("SalePricePerUnit")</th>
+                        <th data-sortable="true" title="@Tip("Sale_Price_Per_Hour")" class="text-end" data-visible="false">@L("SalePricePerHour")</th>
+                        <th data-sortable="true" title="@Tip("Est_Fab_Hours")" class="text-end" data-visible="false">@L("EstFabHours")</th>
+                        <th data-sortable="true" title="@Tip("Est_Assembly_Hours")" class="text-end" data-visible="false">@L("EstAssemblyHours")</th>
+                        <th data-sortable="true" title="@Tip("Status")">@L("Status")</th>
+                        <th data-sortable="true" title="Maker / checker state of the latest change">Approval</th>
+                        <th data-sortable="true" data-visible="false">Updated By</th>
+                        <th data-sortable="true" data-visible="false">Updated</th>
+                        <th data-width="90">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Products)
+                    {
+                        <tr>
+                            @if (canBulk)
+                            {
+                                <td></td>
+                            }
+                            <td>@p.ProductId</td>
+                            <td>@(p.UpdateStatus == ProductApproval.Pending ? "1" : "")</td>
+                            @{ Model.PendingRequests.TryGetValue(p.ProductId, out var request); }
+                            <td>@request?.AuditId</td>
+                            <td>@(request != null && string.Equals(request.MakerId, me, StringComparison.OrdinalIgnoreCase) ? "1" : "")</td>
+                            <td><a asp-action="Details" asp-route-id="@p.ProductId">@p.ProductName</a></td>
+                            <td>@p.ProductCode</td>
+                            <td>@p.ProductFamily</td>
+                            <td>@p.ProductType</td>
+                            <td>@p.Model</td>
+                            <td>@p.Size</td>
+                            <td>@p.CapacityGroup</td>
+                            <td>@p.SiopModel</td>
+                            <td>@p.SiopTier</td>
+                            <td>@p.DefaultSupplySource</td>
+                            <td class="text-end">@p.SalePricePerUnit?.ToString("N0")</td>
+                            <td class="text-end">@p.SalePricePerHour?.ToString("N0")</td>
+                            <td class="text-end">@p.EstFabHours?.ToString("0.##")</td>
+                            <td class="text-end">@p.EstAssemblyHours?.ToString("0.##")</td>
+                            <td><span class="badge @StatusClass(p.Status)">@p.Status</span></td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(p.UpdateStatus))
+                                {
+                                    <span class="badge rounded-pill @ProductApproval.BadgeClass(p.UpdateStatus)"
+                                          title="@($"{p.LastModifiedByRole} {p.UpdatedBy}, {p.UpdatedDate:dd-MM-yyyy HH:mm 'UTC'}{(string.IsNullOrEmpty(p.Remarks) ? "" : ": " + p.Remarks)}")">@ProductApproval.Label(p.UpdateStatus)</span>
+                                }
+                            </td>
+                            <td>@p.UpdatedBy</td>
+                            <td>@p.UpdatedDate?.ToString("dd-MM-yyyy HH:mm 'UTC'")</td>
+                            <td class="text-nowrap">
+                                @if (p.UpdateStatus == ProductApproval.Pending)
+                                {
+                                    @if (userLevel >= 3)
+                                    {
+                                        <a asp-action="Details" asp-route-id="@p.ProductId" class="btn btn-sm btn-warning bi bi-hourglass-split" title="Pending approval: open to review"></a>
+                                    }
+                                    else
+                                    {
+                                        <span class="btn btn-sm btn-light bi bi-hourglass-split disabled" title="Waiting for approval"></span>
+                                    }
+                                }
+                                else if (userLevel >= 2)
+                                {
+                                    <a asp-action="Edit" asp-route-id="@p.ProductId" class="btn btn-sm btn-primary bi bi-pencil-square" title="Edit" onclick="showloader()"></a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    </div>
+</div>
+
+<partial name="_ProductMasterStyles" />
+@{
+    await Html.RenderPartialAsync("_LoaderPartial");
+}
+
+@section Scripts {
+    <script>
+        // A row waiting for approval can't be bulk-updated. A Checker can tick it to approve or reject it,
+        // unless they submitted it themselves.
+        var pmCanDecide = @(canDecide ? "true" : "false");
+        function pmCheckFormatter(value, row) {
+            if (row.pending !== '1') return value;
+            return pmCanDecide && row.audit && row.own !== '1' ? value : { disabled: true, checked: false };
+        }
+        (function () {
+            var btn = document.getElementById('pmBulkBtn');
+            if (!btn) return;
+            var max = @ProductBulk.MaxRows;
+            function rows() { return $('#table').bootstrapTable('getSelections'); }
+            function trim(v) { return String(v == null ? '' : v).trim(); }
+            function toUpdate() { return rows().filter(function (r) { return r.pending !== '1'; }).map(function (r) { return trim(r.pid); }).filter(Boolean); }
+            function toDecide() { return rows().filter(function (r) { return r.pending === '1'; }).map(function (r) { return trim(r.audit); }).filter(Boolean); }
+
+            var approveBtn = document.getElementById('pmApproveSelected');
+            var rejectBtn = document.getElementById('pmRejectSelected');
+            var panel = document.getElementById('pmDecidePanel');
+            var mode = null;
+
+            function update() {
+                var n = toUpdate().length;
+                document.getElementById('pmSelCount').textContent = n;
+                btn.disabled = n === 0;
+                if (!approveBtn) return;
+                var d = toDecide().length;
+                document.querySelectorAll('.pm-pending-count').forEach(function (b) { b.textContent = d; });
+                approveBtn.disabled = rejectBtn.disabled = d === 0;
+                if (d === 0) close(); else if (mode) label();
+            }
+            $('#table').on('check.bs.table uncheck.bs.table check-all.bs.table uncheck-all.bs.table check-some.bs.table uncheck-some.bs.table post-body.bs.table', update);
+
+            btn.addEventListener('click', function () {
+                var ids = toUpdate();
+                if (ids.length === 0) return;
+                if (ids.length > max) { alert('You can update at most ' + max + ' products at once. You selected ' + ids.length + '.'); return; }
+                var go = document.getElementById('pmBulkGo');
+                go.innerHTML = '';
+                ids.forEach(function (id) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden'; input.name = 'ids'; input.value = id;
+                    go.appendChild(input);
+                });
+                showloader();
+                go.submit();
+            });
+
+            if (!approveBtn) return;
+            var form = document.getElementById('pmDecideForm');
+            var remarks = document.getElementById('pmDecideRemarks');
+            var submit = document.getElementById('pmDecideSubmit');
+            function label() {
+                var approve = mode === 'approve';
+                document.getElementById('pmDecideLabel').textContent = approve
+                    ? 'Review comment (optional, saved on every approved request)'
+                    : 'Reason for rejecting (required, sent to every Maker)';
+                submit.className = 'btn btn-sm ' + (approve ? 'btn-success' : 'btn-danger');
+                submit.textContent = (approve ? 'Approve ' : 'Reject ') + toDecide().length + ' request(s)';
+            }
+            function open(m) {
+                mode = m;
+                form.action = m === 'approve' ? '@Url.Action("ApproveSelected")' : '@Url.Action("RejectSelected")';
+                panel.hidden = false;
+                label();
+                remarks.focus();
+            }
+            function close() { mode = null; if (panel) panel.hidden = true; }
+            approveBtn.addEventListener('click', function () { open('approve'); });
+            rejectBtn.addEventListener('click', function () { open('reject'); });
+            document.getElementById('pmDecideCancel').addEventListener('click', close);
+            form.addEventListener('submit', function (e) {
+                var ids = toDecide();
+                if (ids.length === 0) { e.preventDefault(); return; }
+                if (mode === 'reject' && !remarks.value.trim()) { e.preventDefault(); alert('Enter a reason to reject the selected requests.'); return; }
+                if (!confirm((mode === 'approve' ? 'Approve ' : 'Reject ') + ids.length + ' request(s)?')) { e.preventDefault(); return; }
+                var holder = document.getElementById('pmDecideIds');
+                holder.innerHTML = '';
+                ids.forEach(function (id) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden'; input.name = 'auditIds'; input.value = id;
+                    holder.appendChild(input);
+                });
+                showloader();
+            });
+        })();
+
+        (function () {
+            var tree = document.getElementById('pmTree');
+            function setOpen(li, open) {
+                var children = li.querySelector(':scope > .pm-children');
+                var btn = li.querySelector(':scope > .pm-row > .pm-toggle');
+                if (!children || !btn) return;
+                children.hidden = !open;
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                btn.firstElementChild.className = 'bi ' + (open ? 'bi-chevron-down' : 'bi-chevron-right');
+            }
+            tree.addEventListener('click', function (e) {
+                var btn = e.target.closest('.pm-toggle');
+                if (!btn) return;
+                var li = btn.closest('li');
+                setOpen(li, btn.getAttribute('aria-expanded') !== 'true');
+            });
+            document.getElementById('pmExpandAll').onclick = function () { tree.querySelectorAll('li.pm-node').forEach(function (li) { setOpen(li, true); }); };
+            document.getElementById('pmCollapseAll').onclick = function () { tree.querySelectorAll('li.pm-node').forEach(function (li) { setOpen(li, false); }); };
+
+            // Find in hierarchy: show matching nodes and their ancestors
+            document.getElementById('pmTreeFilter').addEventListener('input', function () {
+                var term = this.value.trim().toLowerCase();
+                var nodes = tree.querySelectorAll('li.pm-level-1, li.pm-level-2, li.pm-level-3, li.pm-level-4');
+                nodes.forEach(function (li) { li.style.display = ''; li.classList.remove('pm-match'); });
+                if (!term) return;
+                nodes.forEach(function (li) { li.style.display = 'none'; });
+                nodes.forEach(function (li) {
+                    var name = li.querySelector(':scope > .pm-row > .pm-link').textContent.toLowerCase();
+                    if (name.indexOf(term) === -1) return;
+                    li.classList.add('pm-match');
+                    li.style.display = '';
+                    li.querySelectorAll('li').forEach(function (d) { d.style.display = ''; });
+                    for (var a = li.parentElement.closest('li'); a; a = a.parentElement.closest('li')) { a.style.display = ''; setOpen(a, true); }
+                });
+            });
+
+            var selected = tree.querySelector('.pm-selected');
+            if (selected) selected.scrollIntoView({ block: 'nearest' });
+        })();
+    </script>
+}

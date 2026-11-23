@@ -1,0 +1,181 @@
+@model IReadOnlyList<Gradian.Mdm.Core.Entities.ProductMasterAudit>
+@using Gradian.Mdm.Services.DTO
+@inject Gradian.Mdm.Services.Interfaces.IProductMasterService ProductMasterService
+@{
+    ViewData["Title"] = "Product Approval";
+    var labels = await ProductMasterService.LabelsAsync();
+    string L(string property) => ProductFieldLabels.Label(labels, property);
+    var me = ViewBag.UserName as string ?? "";
+    bool Own(Gradian.Mdm.Core.Entities.ProductMasterAudit a) => string.Equals(a.MakerId, me, StringComparison.OrdinalIgnoreCase);
+    var decidable = Model.Count(a => !Own(a));
+}
+
+<div class="pt-3">
+    <partial name="_Alert" />
+    <div id="toolbar">
+        <h4 class="mb-0">Product Approval</h4>
+        <div class="text-muted">Changes submitted by Makers, waiting for a Checker. Open a request to compare it with the current product, or tick several to approve or reject them together.</div>
+        @if (decidable > 0)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <button type="button" class="btn btn-success btn-sm" id="pmApproveSelected" disabled>
+                    <i class="bi bi-check2-all"></i> Approve selected <span class="badge bg-light text-dark pm-sel-count">0</span>
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" id="pmRejectSelected" disabled>
+                    <i class="bi bi-x-circle"></i> Reject selected <span class="badge bg-light text-dark pm-sel-count">0</span>
+                </button>
+                @if (decidable < Model.Count)
+                {
+                    <span class="text-muted small">Your own requests can't be ticked: another Checker must decide them.</span>
+                }
+            </div>
+        }
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <p class="text-muted mt-3">No product changes are waiting for approval.</p>
+    }
+    else
+    {
+        <form asp-action="ApproveSelected" method="post" id="pmDecideForm">
+            <div id="pmDecideIds"></div>
+            <div class="card mb-2" id="pmDecidePanel" hidden>
+                <div class="card-body py-2">
+                    <label for="pmDecideRemarks" class="form-label mb-0" id="pmDecideLabel">Review comment</label>
+                    <textarea class="form-control" rows="2" name="remarks" id="pmDecideRemarks" maxlength="2000"></textarea>
+                    <div class="d-flex gap-2 mt-2">
+                        <button type="submit" class="btn btn-sm" id="pmDecideSubmit"></button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="pmDecideCancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <table class="table table-bordered table-hover" id="table"
+               data-toggle="table"
+               data-toolbar="#toolbar"
+               data-id-field="auditId"
+               data-maintain-meta-data="true"
+               data-page-size="25"
+               data-page-list="[25, 50, 100, All]"
+               data-show-columns="true"
+               data-buttons-align="right"
+               data-search="true"
+               data-show-fullscreen="true"
+               data-pagination="true"
+               data-resizable="true">
+            <thead class="tb-header">
+                <tr>
+                    <th data-field="state" data-checkbox="true" data-formatter="pmCheckFormatter"></th>
+                    <th data-field="own" data-visible="false" data-switchable="false">Own</th>
+                    <th data-field="auditId" data-sortable="true">Request #</th>
+                    <th data-sortable="true">@L("ProductName") (proposed)</th>
+                    <th data-sortable="true" data-visible="false">Hierarchy</th>
+                    <th data-sortable="true">@L("ProductCode")</th>
+                    <th data-sortable="true">@L("Status")</th>
+                    <th data-sortable="true">Submitted by</th>
+                    <th data-sortable="true">Submitted</th>
+                    <th>Reason</th>
+                    <th data-width="170">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in Model)
+                {
+                    <tr>
+                        <td></td>
+                        <td>@(Own(a) ? "1" : "")</td>
+                        <td>@a.AuditId</td>
+                        <td><a asp-action="Review" asp-route-id="@a.AuditId">@a.ProductName</a></td>
+                        <td>@a.NodePath</td>
+                        <td>@a.ProductCode</td>
+                        <td>@a.Status</td>
+                        <td>@a.MakerId</td>
+                        <td>@a.ChangeTimestamp.ToString("dd-MM-yyyy HH:mm 'UTC'")</td>
+                        <td class="small">@a.Remarks</td>
+                        <td class="text-nowrap">
+                            <a asp-action="Review" asp-route-id="@a.AuditId" class="btn btn-info btn-sm bi bi-info-circle text-black" title="Review changes" data-toggle="tooltip" onclick="showloader()"></a>
+                            <form asp-action="Approve" method="post" class="d-inline">
+                                <input type="hidden" name="auditId" value="@a.AuditId" />
+                                <input type="hidden" name="returnTo" value="list" />
+                                <button type="submit" class="btn btn-success btn-sm bi bi-check-circle text-white" title="Approve" data-toggle="tooltip"
+                                        onclick="return confirm('Approve this change to @a.ProductName.Replace("'", "")?')"></button>
+                            </form>
+                            <a asp-action="Review" asp-route-id="@a.AuditId" asp-fragment="decision" class="btn btn-danger btn-sm bi bi-x-circle text-white" title="Reject (needs a comment)" data-toggle="tooltip"></a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+<partial name="_ProductMasterStyles" />
+@{
+    await Html.RenderPartialAsync("_LoaderPartial");
+}
+
+@section Scripts {
+    <script>
+        // A Checker can't decide their own request, so it can't be ticked
+        function pmCheckFormatter(value, row) {
+            return row.own === '1' ? { disabled: true, checked: false } : value;
+        }
+        (function () {
+            var approveBtn = document.getElementById('pmApproveSelected');
+            var rejectBtn = document.getElementById('pmRejectSelected');
+            if (!approveBtn) return;
+            var form = document.getElementById('pmDecideForm');
+            var panel = document.getElementById('pmDecidePanel');
+            var remarks = document.getElementById('pmDecideRemarks');
+            var submit = document.getElementById('pmDecideSubmit');
+            var mode = null;
+
+            function selected() { return $('#table').bootstrapTable('getSelections').map(function (r) { return String(r.auditId).trim(); }).filter(Boolean); }
+            function update() {
+                var n = selected().length;
+                document.querySelectorAll('.pm-sel-count').forEach(function (b) { b.textContent = n; });
+                approveBtn.disabled = rejectBtn.disabled = n === 0;
+                if (n === 0) close();
+                else if (mode) label();
+            }
+            function label() {
+                var n = selected().length;
+                var approve = mode === 'approve';
+                document.getElementById('pmDecideLabel').textContent = approve
+                    ? 'Review comment (optional, saved on every approved request)'
+                    : 'Reason for rejecting (required, sent to every Maker)';
+                submit.className = 'btn btn-sm ' + (approve ? 'btn-success' : 'btn-danger');
+                submit.textContent = (approve ? 'Approve ' : 'Reject ') + n + ' request(s)';
+            }
+            function open(m) {
+                mode = m;
+                form.action = m === 'approve' ? '@Url.Action("ApproveSelected")' : '@Url.Action("RejectSelected")';
+                panel.hidden = false;
+                label();
+                remarks.focus();
+            }
+            function close() { mode = null; panel.hidden = true; }
+
+            $('#table').on('check.bs.table uncheck.bs.table check-all.bs.table uncheck-all.bs.table check-some.bs.table uncheck-some.bs.table post-body.bs.table', update);
+            approveBtn.addEventListener('click', function () { open('approve'); });
+            rejectBtn.addEventListener('click', function () { open('reject'); });
+            document.getElementById('pmDecideCancel').addEventListener('click', close);
+
+            form.addEventListener('submit', function (e) {
+                var ids = selected();
+                if (ids.length === 0) { e.preventDefault(); return; }
+                if (mode === 'reject' && !remarks.value.trim()) { e.preventDefault(); alert('Enter a reason to reject the selected requests.'); return; }
+                if (!confirm((mode === 'approve' ? 'Approve ' : 'Reject ') + ids.length + ' request(s)?')) { e.preventDefault(); return; }
+                var holder = document.getElementById('pmDecideIds');
+                holder.innerHTML = '';
+                ids.forEach(function (id) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden'; input.name = 'auditIds'; input.value = id;
+                    holder.appendChild(input);
+                });
+                showloader();
+            });
+        })();
+    </script>
+}

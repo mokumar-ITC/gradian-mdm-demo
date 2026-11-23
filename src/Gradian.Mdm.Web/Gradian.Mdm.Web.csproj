@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- ASP.NET Core MVC front end (server-rendered Razor views). -->
+  <PropertyGroup>
+    <UserSecretsId>gradian-mdm-web</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gradian.Mdm.Infrastructure\Gradian.Mdm.Infrastructure.csproj" />
+    <ProjectReference Include="..\Gradian.Mdm.Services\Gradian.Mdm.Services.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Gradian.Mdm.Tests" />
+  </ItemGroup>
+</Project>

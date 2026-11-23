@@ -1,0 +1,95 @@
+html {
+    font-size: 12px;
+    font-family: 'Arial', sans-serif;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 12px;
+        font-family: 'Arial', sans-serif;
+    }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+}
+.height-lst{
+    height:40px !important;
+}
+.tb-header {
+    background: #002b5c;
+    color: white;
+    font-size: 14px;
+}
+.container-fluid {
+    font-size: 16px;
+}
+.control-label {
+    padding-bottom: 5px;
+}
+.label-bold {
+    font-weight: 600;
+}
+#divLoading {
+    height: 100%;
+    width: 100%;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transform: -webkit-translate(-50%, -50%);
+    transform: -moz-translate(-50%, -50%);
+    transform: -ms-translate(-50%, -50%);
+    background-color: #80808026;
+}
+/* BLITZDG look: brand title, read-only fields in grey */
+.brand-title {
+    color: #0391e8;
+    font-size: 1.5rem;
+    font-weight: 500;
+}
+.form-control[readonly] {
+    background-color: #e9ecef;
+    opacity: 1;
+}
+
+/* ---- Header and navigation ---- */
+.bg-hd-cus {
+    background-color: white !important;
+    color: #0391e8 !important;
+    font-size: 18px !important;
+    font-weight: 500;
+}
+
+.bg-hd-cus a,
+.bg-hd-cus a:link,
+.bg-hd-cus a:hover {
+    color: #0391e8 !important;
+    font-size: 16px;
+}
+
+.bg-hd-cus a:hover {
+    background-color: white !important;
+}
+
+.nav-box {
+    border: 1px solid #dee2e6;
+    min-width: 150px;
+    text-align: center;
+}
+
+.dropdown-item.active {
+    background: #e5eff7;
+}
+
+.user-box { font-size: 15px; color: #002b5c; }
+.role-badge { background: #002b5c; color: #fff; font-size: 12px; }

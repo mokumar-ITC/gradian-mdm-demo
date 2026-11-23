@@ -1,0 +1,141 @@
+# Continuous deployment to Azure App Service (Linux, .NET 10).
+#
+#   build      publish the web app once; the same package goes to every environment
+#   staging    deploy to the staging App Service, then check /health
+#   production deploy the same package to production (add required reviewers to the
+#              "production" environment in GitHub so this waits for an approval)
+#
+# One-time setup (see README > Deployment):
+#   * Azure: an App Service per environment, with app settings / connection string configured there
+#     (Database__Provider, ConnectionStrings__Mdm or a Key Vault reference, ASPNETCORE_FORWARDEDHEADERS_ENABLED=true).
+#   * Entra ID: an app registration with a federated credential for this repository's environments,
+#     given the "Website Contributor" role on the App Services only.
+#   * GitHub environments "staging" and "production", each with:
+#       secrets  AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID   (identifiers, not passwords)
+#       variable AZURE_WEBAPP_NAME
+#   * Repository variable DEPLOY_ENABLED = true. Until it is set, only the build job runs.
+# No publish profiles or passwords are stored in GitHub: sign-in uses OpenID Connect.
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy-production:
+        description: "Also deploy to production after staging"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false   # never cancel a deployment half-way
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Unit tests
+        run: dotnet test Gradian.Mdm.sln --configuration Release
+
+      - name: Publish
+        run: dotnet publish src/Gradian.Mdm.Web --configuration Release --output publish
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webapp
+          path: publish
+          retention-days: 30
+
+  staging:
+    name: Deploy to staging
+    needs: build
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+    permissions:
+      contents: read
+      id-token: write   # OpenID Connect sign-in to Azure
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: webapp
+          path: publish
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: publish
+
+      - name: Smoke test (/health)
+        run: |
+          url="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 10 "$url"; then echo; echo "Healthy"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::$url did not report Healthy"; exit 1
+
+  production:
+    name: Deploy to production
+    needs: staging
+    if: vars.DEPLOY_ENABLED == 'true' && (github.event_name == 'push' || inputs.deploy-production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: webapp
+          path: publish
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: publish
+
+      - name: Smoke test (/health)
+        run: |
+          url="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 10 "$url"; then echo; echo "Healthy"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::$url did not report Healthy"; exit 1

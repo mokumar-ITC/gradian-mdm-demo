@@ -1,0 +1,16 @@
+@if (TempData["alertMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show mt-2" role="alert">
+        @TempData["alertMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["bulkMessage"] is string bulkMessage)
+{
+    var bulkOk = TempData["bulkOk"] as bool? ?? true;
+    <div class="pm-note @(bulkOk ? "pm-note-success" : "pm-note-danger") d-flex align-items-start gap-2 mt-2" role="status" id="pmBulkMessage">
+        <i class="bi @(bulkOk ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+        <span class="flex-grow-1">@bulkMessage</span>
+        <button type="button" class="btn-close" aria-label="Close" onclick="this.parentElement.remove()"></button>
+    </div>
+}

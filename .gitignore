@@ -1,0 +1,39 @@
+# ---- Build output ----
+bin/
+obj/
+publish/
+TestResults/
+test-results/
+*.trx
+
+# ---- IDE ----
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# ---- Secrets and machine-specific configuration: never commit ----
+# Committed appsettings.json / appsettings.Development.json hold no secrets. Real connection strings go in
+# user-secrets (local), environment variables, or App Service settings / Key Vault (Azure).
+appsettings.*.local.json
+appsettings.Production.json
+appsettings.Staging.json
+.env
+.env.*
+!.env.example
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.publishsettings
+*.PublishSettings
+*.pubxml
+*.pubxml.user
+
+# ---- Local output ----
+Logs/
+*.log
+__pycache__/
+*.pyc

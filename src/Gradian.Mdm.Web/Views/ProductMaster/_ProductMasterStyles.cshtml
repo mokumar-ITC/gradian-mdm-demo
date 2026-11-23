@@ -1,0 +1,67 @@
+<style>
+    .pm-stat { border: 1px solid #dee2e6; border-radius: 6px; padding: 8px 12px; background: #fff; }
+    .pm-stat-value { font-size: 1.6rem; font-weight: 600; color: #002b5c; line-height: 1.1; }
+    .pm-stat-label { color: #6c757d; font-size: .95rem; }
+    .pm-stat-accent { border-color: #0391e8; background: #f2f9fe; }
+    .pm-stat-accent .pm-stat-value { color: #0391e8; }
+
+    .pm-tree-card .card-body { max-height: 72vh; overflow-y: auto; }
+    .pm-tree, .pm-children { list-style: none; margin: 0; padding: 0; }
+    .pm-children { padding-left: 14px; border-left: 1px dotted #c8d3df; margin-left: 9px; }
+    .pm-row { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 4px; }
+    .pm-row:hover { background: #f1f5f9; }
+    .pm-selected, .pm-selected:hover { background: #e5eff7; }
+    .pm-selected > .pm-link { font-weight: 600; color: #002b5c; }
+    .pm-toggle { border: 0; background: none; padding: 0; width: 18px; color: #6c757d; flex: none; }
+    .pm-toggle-spacer { width: 18px; flex: none; }
+    .pm-link { flex: 1; min-width: 0; text-decoration: none; color: #1f2d3d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pm-link:hover { text-decoration: underline; }
+    .pm-level-1 > .pm-row > .pm-link { font-weight: 600; }
+    .pm-count { flex: none; font-size: .85rem; color: #6c757d; background: #eef2f6; border-radius: 10px; padding: 0 7px; }
+    .pm-match > .pm-row > .pm-link { background: #fff3cd; }
+
+    .pm-level-badge { background: #002b5c; font-size: .75rem; font-weight: 500; }
+    .pm-chip { background: #eef6fd; color: #035f99; border: 1px solid #bfe0f7; font-weight: 500; margin: 0 4px 4px 0; font-size: .9rem; }
+    .pm-chip:hover { background: #d9edfb; }
+
+    .pm-stat-pending { border-color: #f0c36d; background: #fff8e6; }
+    .pm-stat-pending .pm-stat-value { color: #a86b00; }
+    .pm-stat-pending:hover { background: #fff1cc; }
+
+    .pm-filter { background: #fff; color: #1f2d3d; border: 1px solid #ced4da; font-weight: 500; font-size: .9rem; }
+    .pm-filter:hover { background: #f1f5f9; }
+    .pm-filter-on { background: #002b5c; color: #fff; border-color: #002b5c; }
+    .pm-filter-on:hover { background: #002b5c; }
+    .pm-filter .badge { padding: .3em .35em; }
+
+    /* Persistent banners: not .alert, which site-wide site.js removes after 4 seconds */
+    .pm-note { padding: .5rem 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .25rem; }
+    .pm-note-info { color: #055160; background: #cff4fc; border-color: #b6effb; }
+    .pm-note-secondary { color: #41464b; background: #e2e3e5; border-color: #d3d6d8; }
+    .pm-note-danger { color: #842029; background: #f8d7da; border-color: #f5c2c7; }
+    .pm-note-warning { color: #664d03; background: #fff3cd; border-color: #ffecb5; }
+    .pm-note-success { color: #0f5132; background: #d1e7dd; border-color: #badbcc; }
+
+    /* Bulk update grid */
+    .pm-bulk-wrap { overflow: auto; max-height: 70vh; border: 1px solid #dee2e6; border-radius: 4px; }
+    .pm-bulk { margin: 0; white-space: nowrap; }
+    .pm-bulk th, .pm-bulk td { padding: 4px 6px; vertical-align: middle; }
+    .pm-bulk thead th { position: sticky; top: 0; z-index: 2; }
+    .pm-bulk .pm-fill-row td { position: sticky; top: 33px; z-index: 2; background: #f2f9fe; }
+    .pm-bulk .pm-sticky { position: sticky; left: 0; z-index: 1; background: #fff; min-width: 220px; max-width: 280px; white-space: normal; }
+    .pm-bulk thead .pm-sticky, .pm-bulk .pm-fill-row .pm-sticky { z-index: 3; }
+    .pm-bulk thead .pm-sticky { background: inherit; }
+    .pm-bulk .pm-fill-row .pm-sticky { background: #f2f9fe; }
+    .pm-bulk input, .pm-bulk select { min-width: 110px; }
+    .pm-bulk .pm-col-ProductName input { min-width: 240px; }
+    .pm-bulk tr.pm-row-error td { background: #fdf1f2; }
+    .pm-bulk tr.pm-row-error .pm-sticky { background: #fdf1f2; }
+    .pm-row-msg { color: #842029; font-size: .85rem; }
+
+    .pm-changed { border-color: #0391e8; background: #eef7fe; }
+    .pm-was { color: #035f99; }
+
+    .pm-attr th { width: 42%; font-weight: 500; color: #495057; }
+    .pm-attr td { font-weight: 600; }
+    .pm-help { color: #6c757d; cursor: help; }
+</style>

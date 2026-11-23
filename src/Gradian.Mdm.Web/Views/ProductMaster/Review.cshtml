@@ -1,0 +1,106 @@
+@model Gradian.Mdm.Services.DTO.ProductReview
+@using Gradian.Mdm.Services.DTO
+@{
+    var cur = Model.Current;
+    var req = Model.Request;
+    ViewData["Title"] = "Review change #" + req.AuditId;
+    var pending = req.ApprovalStatus == ProductApproval.Pending;
+}
+
+<div class="pt-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1">
+            <li class="breadcrumb-item"><a asp-action="Index">Product Master</a></li>
+            <li class="breadcrumb-item"><a asp-action="Approvals">Product Approval</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Request #@req.AuditId</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+            <h4 class="mb-1">@cur.ProductName</h4>
+            <span class="badge @ProductApproval.BadgeClass(req.ApprovalStatus)">@ProductApproval.Label(req.ApprovalStatus)</span>
+            <span class="text-muted ms-2">@cur.NodePath</span>
+        </div>
+        <a class="btn btn-primary btn-sm" asp-action="Approvals" onclick="showloader()"><i class="bi bi-arrow-left"></i> Back to list</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            Submitted by <strong>@req.MakerId</strong> (@req.LastModifiedByRole) on @req.ChangeTimestamp.ToString("dd-MM-yyyy HH:mm 'UTC'")
+            @if (!string.IsNullOrEmpty(req.Remarks))
+            {
+                <div class="mt-1"><i class="bi bi-chat-left-quote"></i> <em>@req.Remarks</em></div>
+            }
+            @if (!pending)
+            {
+                <div class="mt-1">Decided by <strong>@req.CheckerId</strong> on @req.ApprovalTimestamp?.ToString("dd-MM-yyyy HH:mm 'UTC'")@(string.IsNullOrEmpty(req.CheckerRemarks) ? "" : ": " + req.CheckerRemarks)</div>
+            }
+        </div>
+    </div>
+
+    <table class="table table-bordered table-sm align-middle">
+        <thead class="tb-header">
+            <tr>
+                <th style="width:28%">Field</th>
+                <th style="width:36%">Original data</th>
+                <th style="width:36%">Modified data</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var f in ProductFieldLabels.All)
+            {
+                var changed = Model.Changed.Contains(f.Property);
+                var locked = Model.Locked.Contains(f.Property);
+                <tr class="@(changed ? "table-info" : "")">
+                    <td>
+                        @ProductFieldLabels.Label(Model.Labels, f.Property)
+                        @if (changed) { <span class="badge bg-primary ms-1">changed</span> }
+                        @if (locked && changed) { <span class="badge bg-secondary ms-1" title="Locked by an administrator: approving keeps the original value">locked</span> }
+                    </td>
+                    <td>@ProductFieldLabels.Format(cur, f.Property)</td>
+                    <td class="@(changed ? "fw-semibold" : "text-muted")">@ProductFieldLabels.Format(req, f.Property)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <div class="text-muted small mb-3">@Model.Changed.Count field(s) differ from the current product.</div>
+
+    @if (pending)
+    {
+        <div id="decision" class="card">
+            <div class="card-header tb-header">Decision</div>
+            <div class="card-body">
+                @if (Model.IsOwnRequest)
+                {
+                    <div class="pm-note pm-note-warning mb-0">You submitted this change, so another Checker must approve or reject it.</div>
+                }
+                else
+                {
+                    <form method="post" asp-action="Reject">
+                        <input type="hidden" name="auditId" value="@req.AuditId" />
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-9">
+                                <label for="remarks" class="form-label mb-0">Review comment <span class="text-muted">(required to reject)</span></label>
+                                <textarea class="form-control" rows="3" name="remarks" id="remarks" maxlength="2000"></textarea>
+                            </div>
+                            <div class="col-md-3 d-flex gap-2">
+                                <button type="submit" class="btn btn-danger" onclick="if (!document.getElementById('remarks').value.trim()) { alert('Enter a comment to reject the change.'); return false; } showloader();">
+                                    <i class="bi bi-x-circle"></i> Reject
+                                </button>
+                                <button type="submit" class="btn btn-success" formaction="@Url.Action("Approve")"
+                                        onclick="if (!confirm('Approve this change?')) return false; showloader();">
+                                    <i class="bi bi-check-circle"></i> Approve
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                }
+            </div>
+        </div>
+    }
+</div>
+<partial name="_ProductMasterStyles" />
+@{
+    await Html.RenderPartialAsync("_LoaderPartial");
+}

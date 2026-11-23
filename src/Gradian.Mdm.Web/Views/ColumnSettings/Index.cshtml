@@ -1,0 +1,80 @@
+@model IReadOnlyList<Gradian.Mdm.Services.DTO.TableEditStatus>
+@{
+    ViewData["Title"] = "Column Editing";
+}
+
+<div class="pt-3">
+    @if (TempData["alertMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["alertMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    <h4>Column Editing</h4>
+    <p class="text-muted mb-3">
+        Turn a column off to lock it for everyone, including Admins, on the Edit and Bulk Update pages.
+        A pending request approved after a lock keeps the column's current value and still applies its other changes.
+    </p>
+    <p class="text-muted mb-3">
+        Use <strong>Display name</strong> to change what a column is called on screen, for example to match your naming convention.
+        Leave it blank to use the built-in name. Only the label changes: the stored data, the database and the publish views keep their column names.
+    </p>
+
+    @foreach (var group in Model.GroupBy(t => t.Table.Group))
+    {
+        <h5 class="mt-4">@group.Key</h5>
+        <div class="row">
+            @foreach (var status in group)
+            {
+                <div class="col-xl-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header tb-header">@status.Table.Label</div>
+                        <div class="card-body">
+                            <form asp-action="Save" method="post">
+                                <input type="hidden" name="tableKey" value="@status.Table.Key" />
+                                <table class="table table-sm align-middle mb-2">
+                                    <thead>
+                                        <tr>
+                                            <th>Column</th>
+                                            <th>Display name</th>
+                                            <th>Editable</th>
+                                            <th>Last changed</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var column in status.Columns)
+                                        {
+                                            var fieldId = $"{status.Table.Key}-{column.Column.Key}";
+                                            <tr>
+                                                <td><label for="@fieldId" class="mb-0">@column.Column.Label</label></td>
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm" name="displayNames[@column.Column.Key]"
+                                                           value="@column.DisplayName" placeholder="@column.Column.Label" maxlength="100"
+                                                           aria-label="Display name for @column.Column.Label" />
+                                                </td>
+                                                <td>
+                                                    <div class="form-check form-switch mb-0">
+                                                        <input id="@fieldId" class="form-check-input" type="checkbox" role="switch"
+                                                               name="editable" value="@column.Column.Key" checked="@column.IsEditable" />
+                                                    </div>
+                                                </td>
+                                                <td class="small text-muted">
+                                                    @if (column.UpdatedDate != null)
+                                                    {
+                                                        @($"{column.UpdatedBy}, {column.UpdatedDate:dd-MM-yyyy HH:mm 'UTC'}")
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                <button type="submit" class="btn btn-primary btn-sm">Save @status.Table.Label</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

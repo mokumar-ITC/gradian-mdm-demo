@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Data access: PostgreSQL (Npgsql) and Microsoft Fabric Warehouse (Microsoft.Data.SqlClient). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.8" />
+    <PackageReference Include="Npgsql" Version="10.0.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gradian.Mdm.Core\Gradian.Mdm.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Gradian.Mdm.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,190 @@
+@model Gradian.Mdm.Services.DTO.ProductEditPage
+@using System.Globalization
+@inject Gradian.Mdm.Services.Interfaces.IProductMasterService ProductMasterService
+@{
+    var labels = await ProductMasterService.LabelsAsync();
+    var p = Model.Product;
+    ViewData["Title"] = "Edit " + p.ProductName;
+    var f = Model.Form;
+    string Tip(string field) => Model.FieldDescriptions.TryGetValue(field, out var d) ? d ?? "" : "";
+    string Val(string property)
+    {
+        var v = typeof(Gradian.Mdm.Core.Entities.ProductMasterValues).GetProperty(property)!.GetValue(f);
+        return v switch { null => "", decimal d => d.ToString("0.##", CultureInfo.InvariantCulture), _ => Convert.ToString(v, CultureInfo.InvariantCulture) ?? "" };
+    }
+    string Orig(string property) => Gradian.Mdm.Services.DTO.ProductFieldLabels.Format(p, property);
+
+    // (property, workbook field, label, kind, options)  kind: text | int | dec | select | list
+    var groups = new (string Title, string Icon, (string Prop, string Field, string Label, string Kind, IEnumerable<string>? Options)[] Fields)[]
+    {
+        ("Product", "bi-box", new (string, string, string, string, IEnumerable<string>?)[] {
+            ("ProductName", "Product_Name", "Product Name", "text", null),
+            ("ProductCode", "Product_Code", "Product Code", "text", null),
+            ("Status", "Status", "Status", "select", Gradian.Mdm.Core.Entities.ProductMasterValues.Statuses),
+            ("CapacityGroup", "Capacity Group", "Capacity Group", "list", Model.CapacityGroups) }),
+        ("Planning (SIOP)", "bi-calendar3", new (string, string, string, string, IEnumerable<string>?)[] {
+            ("SiopModel", "SIOP_Model", "SIOP Model", "list", Model.SiopModels),
+            ("SiopTier", "SIOP_Tier", "SIOP Tier", "list", Model.SiopTiers),
+            ("DefaultSupplySource", "Default_Supply_Source", "Default Supply Source", "list", Model.SupplySources),
+            ("SectionsPerUnit", "Sections_Per_Unit", "Sections per Unit", "int", null),
+            ("StandardUnitMultiplier", "Standard_Unit_Multiplier", "Standard Unit Multiplier", "dec", null) }),
+        ("Commercial", "bi-currency-dollar", new (string, string, string, string, IEnumerable<string>?)[] {
+            ("SalePricePerUnit", "Sale_Price_Per_Unit", "Sale Price per Unit", "dec", null),
+            ("SalePricePerHour", "Sale_Price_Per_Hour", "Sale Price per Hour", "dec", null) }),
+        ("Labor", "bi-tools", new (string, string, string, string, IEnumerable<string>?)[] {
+            ("EstFabHours", "Est_Fab_Hours", "Est. Fabrication Hours", "dec", null),
+            ("EstAssemblyHours", "Est_Assembly_Hours", "Est. Assembly Hours", "dec", null),
+            ("FabLbrHrsPct", "Fab_Lbr_Hrs_%", "Fabrication Labor Hrs %", "dec", null),
+            ("AssmbLbrHrsPct", "Assmb_Lbr_Hrs_%", "Assembly Labor Hrs %", "dec", null) }),
+        ("Components", "bi-fan", new (string, string, string, string, IEnumerable<string>?)[] {
+            ("QtyFans", "Qty_Fans", "Qty Fans", "int", null),
+            ("QtyCoils", "Qty_Coils", "Qty Coils", "int", null),
+            ("QtyPanels", "Qty_Panels", "Qty Panels", "int", null) }),
+    };
+}
+
+<div class="pt-3">
+    <nav aria-label="Hierarchy path">
+        <ol class="breadcrumb mb-1">
+            <li class="breadcrumb-item"><a asp-action="Index">Product Master</a></li>
+            @foreach (var crumb in Model.Breadcrumb)
+            {
+                <li class="breadcrumb-item"><a asp-action="Index" asp-route-nodeId="@crumb.NodeId" title="@crumb.LevelName">@crumb.NodeName</a></li>
+            }
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@p.ProductId">@p.ProductName</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <h4 class="mb-0">Edit product</h4>
+        <a class="btn btn-outline-primary btn-sm" asp-action="Details" asp-route-id="@p.ProductId"><i class="bi bi-arrow-left"></i> Back to product</a>
+    </div>
+
+    @if (Model.GoesToApproval)
+    {
+        <div class="pm-note pm-note-info py-2"><i class="bi bi-person-check"></i> As a <strong>Maker</strong>, your changes are sent to a Checker for approval. The product keeps its current values until then.</div>
+    }
+    else
+    {
+        <div class="pm-note pm-note-secondary py-2"><i class="bi bi-lightning"></i> As a <strong>Checker / Admin</strong>, your changes are saved directly and recorded in the change history.</div>
+    }
+    @if (ViewBag.FormError != null)
+    {
+        <div class="pm-note pm-note-danger py-2" role="alert"><i class="bi bi-exclamation-triangle"></i> @ViewBag.FormError</div>
+    }
+
+    <div class="text-muted mb-2">Hierarchy: <strong>@p.NodePath</strong> (the hierarchy position is not changed here). Changed fields are highlighted.</div>
+
+    <form asp-action="Edit" method="post" id="pmEditForm">
+        <input type="hidden" name="Form.ProductId" value="@p.ProductId" />
+        <div class="row g-3">
+            @foreach (var g in groups)
+            {
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header tb-header"><i class="bi @g.Icon"></i> @g.Title</div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                @foreach (var fld in g.Fields)
+                                {
+                                    var id = "f_" + fld.Prop;
+                                    var name = "Form." + fld.Prop;
+                                    var wide = fld.Prop == "ProductName" ? "col-12" : "col-sm-6";
+                                    <div class="@wide">
+                                        <label for="@id" class="form-label mb-0">
+                                            @Gradian.Mdm.Services.DTO.ProductFieldLabels.Label(labels, fld.Prop)
+                                            @if (!string.IsNullOrEmpty(Tip(fld.Field)))
+                                            {
+                                                <i class="bi bi-info-circle pm-help" title="@Tip(fld.Field)"></i>
+                                            }
+                                        </label>
+                                        @switch (fld.Kind)
+                                        {
+                                            case "select":
+                                                <select id="@id" name="@name" class="form-select form-select-sm pm-field" data-orig="@Orig(fld.Prop)">
+                                                    @foreach (var o in fld.Options!)
+                                                    {
+                                                        <option value="@o" selected="@(Val(fld.Prop) == o)">@o</option>
+                                                    }
+                                                </select>
+                                                break;
+                                            case "list":
+                                                <input id="@id" name="@name" value="@Val(fld.Prop)" list="@(id)_list" class="form-control form-control-sm pm-field" data-orig="@Orig(fld.Prop)" autocomplete="off" />
+                                                <datalist id="@(id)_list">
+                                                    @foreach (var o in fld.Options!)
+                                                    {
+                                                        <option value="@o"></option>
+                                                    }
+                                                </datalist>
+                                                break;
+                                            case "int":
+                                                <input id="@id" name="@name" value="@Val(fld.Prop)" type="number" min="0" step="1" class="form-control form-control-sm pm-field" data-orig="@Orig(fld.Prop)" />
+                                                break;
+                                            case "dec":
+                                                <input id="@id" name="@name" value="@Val(fld.Prop)" type="number" min="0" step="any" class="form-control form-control-sm pm-field" data-orig="@(Orig(fld.Prop).Replace(",", ""))" />
+                                                break;
+                                            default:
+                                                <input id="@id" name="@name" value="@Val(fld.Prop)" class="form-control form-control-sm pm-field" data-orig="@Orig(fld.Prop)"
+                                                       required="@(fld.Prop == "ProductName")" maxlength="@(fld.Prop == "ProductName" ? 255 : 50)" />
+                                                break;
+                                        }
+                                        <div class="form-text pm-was" hidden>Was: <span></span></div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header tb-header"><i class="bi bi-chat-left-text"></i> Reason for change</div>
+                    <div class="card-body">
+                        <textarea name="Form.ChangeRemarks" class="form-control" rows="4" maxlength="2000"
+                                  placeholder="@(Model.GoesToApproval ? "Tell the Checker why this change is needed (recommended)" : "Optional note for the change history")">@f.ChangeRemarks</textarea>
+                        <div class="d-flex align-items-center gap-2 mt-3">
+                            <button type="submit" class="btn btn-primary" onclick="showloader()">
+                                <i class="bi @(Model.GoesToApproval ? "bi-send" : "bi-save")"></i> @(Model.GoesToApproval ? "Submit for approval" : "Save changes")
+                            </button>
+                            <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@p.ProductId">Cancel</a>
+                            <span class="text-muted ms-auto" id="pmChangeCount"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<partial name="_ProductMasterStyles" />
+@{
+    await Html.RenderPartialAsync("_LoaderPartial");
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            var fields = document.querySelectorAll('#pmEditForm .pm-field');
+            function norm(el, v) {
+                v = (v || '').trim();
+                if (el.type === 'number' && v !== '') { var n = Number(v); return isNaN(n) ? v : String(n); }
+                return v;
+            }
+            function refresh() {
+                var count = 0;
+                fields.forEach(function (el) {
+                    var changed = norm(el, el.value) !== norm(el, el.dataset.orig);
+                    el.classList.toggle('pm-changed', changed);
+                    var was = el.parentElement.querySelector('.pm-was');
+                    was.hidden = !changed;
+                    was.querySelector('span').textContent = el.dataset.orig === '' ? '(blank)' : el.dataset.orig;
+                    if (changed) count++;
+                });
+                document.getElementById('pmChangeCount').textContent = count === 0 ? 'No changes yet' : count + ' field(s) changed';
+            }
+            fields.forEach(function (el) { el.addEventListener('input', refresh); el.addEventListener('change', refresh); });
+            refresh();
+        })();
+    </script>
+}

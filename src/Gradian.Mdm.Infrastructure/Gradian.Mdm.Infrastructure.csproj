@@ -2,7 +2,7 @@
   <!-- Data access: PostgreSQL (Npgsql) and Microsoft Fabric Warehouse (Microsoft.Data.SqlClient). -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.8" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.2" />
     <PackageReference Include="Npgsql" Version="10.0.4" />
   </ItemGroup>
   <ItemGroup>
